@@ -108,53 +108,55 @@ rescue => e
 end
 
 # Atualiza fallbacks e URL do hub em lib/chatwoot_hub.rb
+# Atualiza URL do hub em enterprise/lib/enterprise/chatwoot_hub.rb
 begin
-  possible_paths = [
-    '/app/lib/chatwoot_hub.rb',
-    '/chatwoot/lib/chatwoot_hub.rb',
-    File.join(Rails.root, 'lib', 'chatwoot_hub.rb'),
-    './lib/chatwoot_hub.rb'
+  enterprise_possible_paths = [
+    '/app/enterprise/lib/enterprise/chatwoot_hub.rb',
+    '/chatwoot/enterprise/lib/enterprise/chatwoot_hub.rb',
+    File.join(Rails.root, 'enterprise', 'lib', 'enterprise', 'chatwoot_hub.rb'),
+    './enterprise/lib/enterprise/chatwoot_hub.rb'
   ]
 
-  hub_file = possible_paths.find { |path| File.exist?(path) }
+  enterprise_hub_file = enterprise_possible_paths.find { |path| File.exist?(path) }
 
-  if hub_file
-    puts "📁 Arquivo encontrado: #{hub_file}"
+  if enterprise_hub_file
+    puts "📁 Arquivo enterprise encontrado: #{enterprise_hub_file}"
 
-    backup_file = "#{hub_file}.backup.#{Time.now.strftime('%Y%m%d_%H%M%S')}"
-    FileUtils.cp(hub_file, backup_file)
+    backup_file = "#{enterprise_hub_file}.backup.#{Time.now.strftime('%Y%m%d_%H%M%S')}"
+    FileUtils.cp(enterprise_hub_file, backup_file)
     puts "💾 Backup: #{backup_file}"
 
-    content  = File.read(hub_file)
+    content  = File.read(enterprise_hub_file)
     original = content.dup
 
-    # Altera URL do hub para endereço inválido (impede validação remota)
+    # Bloqueia a URL enterprise
     content.gsub!(
-      /DEFAULT_BASE_URL\s*=\s*['"]https:\/\/hub\.[^'"]+['"]/,
-      "DEFAULT_BASE_URL = 'https://hub.invalid'"
+      /ENTERPRISE_BASE_URL\s*=\s*['"]https:\/\/hub\.[^'"]+['"]/,
+      "ENTERPRISE_BASE_URL = 'https://hub.invalid'"
     )
 
-    # Atualiza fallback do plano
+    # Garante que a variável de ambiente também não consiga sobrescrever
     content.gsub!(
-      /(InstallationConfig\.find_by\(name:\s*['"]INSTALLATION_PRICING_PLAN['"]\)&?\.value\s*\|\|\s*)['"]community['"]/,
-      "\\1'enterprise'"
-    )
-
-    # Atualiza fallback da quantidade
-    content.gsub!(
-      /(InstallationConfig\.find_by\(name:\s*['"]INSTALLATION_PRICING_PLAN_QUANTITY['"]\)&?\.value\s*\|\|\s*)0/,
-      "\\19999999"
+      /ENV\.fetch\(['"]CHATWOOT_HUB_URL['"],\s*ENTERPRISE_BASE_URL\)/,
+      "'https://hub.invalid'"
     )
 
     if content != original
-      File.write(hub_file, content)
-      puts "✅ URL do hub bloqueada (hub.invalid)"
-      puts "✅ Fallbacks atualizados em #{hub_file}"
+      File.write(enterprise_hub_file, content)
+      puts "✅ URL enterprise do hub bloqueada (hub.invalid)"
     else
-      puts "ℹ️  Arquivo já estava atualizado"
+      puts "ℹ️  Arquivo enterprise já estava atualizado"
     end
     puts ""
+  else
+    puts "⚠️  Arquivo enterprise não encontrado, pulando..."
+    puts ""
   end
+
+rescue => e
+  puts "⚠️  Erro ao atualizar arquivo enterprise: #{e.message}"
+  puts ""
+end
 
 rescue => e
   puts "⚠️  Erro ao atualizar arquivo: #{e.message}"
