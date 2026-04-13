@@ -33,7 +33,7 @@ detect_chatwoot_container() {
         docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
         echo ""
         echo -e "${YELLOW}💡 Execute manualmente:${NC}"
-        echo "   docker exec -it <NOME_DO_CONTAINER> bash -c \"wget -qO- https://raw.githubusercontent.com/PhyBruno/Chatwoot-Unlock/2341f8208b97f1dca8c16c4c1ee2c7130a506529/unlock_permanent.rb | bundle exec rails runner -\""
+        echo "   docker exec -it <NOME_DO_CONTAINER> bash -c \"wget -qO- https://raw.githubusercontent.com/PhyBruno/Chatwoot-Unlock/c950175a2ebf33f0abfd1c339251817c80047d35/unlock_permanent.rb | bundle exec rails runner -\""
         exit 1
     fi
 
