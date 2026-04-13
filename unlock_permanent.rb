@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 # 🚀 Dchat - Script PERMANENTE para desbloquear o Chatwoot Enterprise
-# Execute com: wget -qO- wget -qO- https://raw.githubusercontent.com/PhyBruno/Chatwoot-Unlock/2341f8208b97f1dca8c16c4c1ee2c7130a506529/unlock_permanent.rb | bundle exec rails runner -
+# Execute com: wget -qO- https://raw.githubusercontent.com/PhyBruno/Chatwoot-Unlock/2341f8208b97f1dca8c16c4c1ee2c7130a506529/unlock_permanent.rb | bundle exec rails runner -
 
 require 'fileutils'
 
@@ -47,20 +47,18 @@ rescue => e
   puts ""
 end
 
-# Atualiza registros diretamente via SQL para evitar que o trigger interfira no primeiro insert
+# Atualiza registros diretamente via SQL
 begin
   puts "💾 Atualizando configurações no banco de dados..."
 
   conn = ActiveRecord::Base.connection
 
-  # Serialized value no formato YAML que o Chatwoot espera
   plan_yaml     = "--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\nvalue: enterprise\n"
   quantity_yaml = "--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\nvalue: 9999999\n"
 
   plan_yaml_escaped     = conn.quote(plan_yaml)
   quantity_yaml_escaped = conn.quote(quantity_yaml)
 
-  # Usa INSERT ... ON CONFLICT para upsert direto, sem passar pelo ActiveRecord
   conn.execute(<<-SQL)
     INSERT INTO installation_configs (name, serialized_value, locked, created_at, updated_at)
     VALUES (
@@ -109,7 +107,7 @@ rescue => e
   puts "⚠️  Erro ao limpar Redis: #{e.message}"
 end
 
-# Atualiza fallback em lib/chatwoot_hub.rb
+# Atualiza fallbacks e URL do hub em lib/chatwoot_hub.rb
 begin
   possible_paths = [
     '/app/lib/chatwoot_hub.rb',
@@ -130,11 +128,19 @@ begin
     content  = File.read(hub_file)
     original = content.dup
 
+    # Altera URL do hub para endereço inválido (impede validação remota)
+    content.gsub!(
+      /DEFAULT_BASE_URL\s*=\s*['"]https:\/\/hub\.[^'"]+['"]/,
+      "DEFAULT_BASE_URL = 'https://hub.invalid'"
+    )
+
+    # Atualiza fallback do plano
     content.gsub!(
       /(InstallationConfig\.find_by\(name:\s*['"]INSTALLATION_PRICING_PLAN['"]\)&?\.value\s*\|\|\s*)['"]community['"]/,
       "\\1'enterprise'"
     )
 
+    # Atualiza fallback da quantidade
     content.gsub!(
       /(InstallationConfig\.find_by\(name:\s*['"]INSTALLATION_PRICING_PLAN_QUANTITY['"]\)&?\.value\s*\|\|\s*)0/,
       "\\19999999"
@@ -142,6 +148,7 @@ begin
 
     if content != original
       File.write(hub_file, content)
+      puts "✅ URL do hub bloqueada (hub.invalid)"
       puts "✅ Fallbacks atualizados em #{hub_file}"
     else
       puts "ℹ️  Arquivo já estava atualizado"
@@ -173,6 +180,12 @@ begin
     puts "   • Trigger PostgreSQL: ⚠️  Não detectado"
   end
 
+  # Verifica URL do hub no arquivo
+  if hub_file && File.exist?(hub_file)
+    hub_url_line = File.readlines(hub_file).find { |l| l.include?('DEFAULT_BASE_URL') }
+    puts "   • Hub URL: #{hub_url_line&.strip || 'não encontrada'}"
+  end
+
 rescue => e
   puts "⚠️  Erro ao verificar: #{e.message}"
 end
@@ -184,6 +197,7 @@ puts "🔒 PROTEÇÃO ATIVA:"
 puts "   • Trigger PostgreSQL monitora e força valores enterprise"
 puts "   • Qualquer tentativa de alterar será revertida automaticamente"
 puts "   • Configurações marcadas como 'locked'"
+puts "   • Comunicação com hub.chatwoot.com bloqueada"
 puts ""
 puts "🔄 Reinicie o container para aplicar todas as mudanças"
 puts "🌟 Dchat - Educational Project"
