@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 # 🚀 Dchat - Script PERMANENTE para desbloquear o Chatwoot Enterprise
-# Execute com: wget -qO- https://raw.githubusercontent.com/PhyBruno/Chatwoot-Unlock/2341f8208b97f1dca8c16c4c1ee2c7130a506529/unlock_permanent.rb | bundle exec rails runner -
+# Execute com: wget -qO- https://raw.githubusercontent.com/PhyBruno/Chatwoot-Unlock/main/unlock_permanent.rb | bundle exec rails runner -
 
 require 'fileutils'
 
@@ -14,12 +14,12 @@ CREATE OR REPLACE FUNCTION force_enterprise_installation_configs()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.name = 'INSTALLATION_PRICING_PLAN' THEN
-        NEW.serialized_value = to_jsonb('--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\nvalue: enterprise\n'::text);
+        NEW.serialized_value = to_jsonb('--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\\nvalue: enterprise\\n'::text);
         NEW.locked = true;
     END IF;
 
     IF NEW.name = 'INSTALLATION_PRICING_PLAN_QUANTITY' THEN
-        NEW.serialized_value = to_jsonb('--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\nvalue: 9999999\n'::text);
+        NEW.serialized_value = to_jsonb('--- !ruby/hash:ActiveSupport::HashWithIndifferentAccess\\nvalue: 9999999\\n'::text);
         NEW.locked = true;
     END IF;
 
@@ -108,6 +108,58 @@ rescue => e
 end
 
 # Atualiza fallbacks e URL do hub em lib/chatwoot_hub.rb
+begin
+  possible_paths = [
+    '/app/lib/chatwoot_hub.rb',
+    '/chatwoot/lib/chatwoot_hub.rb',
+    File.join(Rails.root, 'lib', 'chatwoot_hub.rb'),
+    './lib/chatwoot_hub.rb'
+  ]
+
+  hub_file = possible_paths.find { |path| File.exist?(path) }
+
+  if hub_file
+    puts "📁 Arquivo base encontrado: #{hub_file}"
+
+    backup_file = "#{hub_file}.backup.#{Time.now.strftime('%Y%m%d_%H%M%S')}"
+    FileUtils.cp(hub_file, backup_file)
+    puts "💾 Backup: #{backup_file}"
+
+    content  = File.read(hub_file)
+    original = content.dup
+
+    content.gsub!(
+      /DEFAULT_BASE_URL\s*=\s*['"]https:\/\/hub\.[^'"]+['"]/,
+      "DEFAULT_BASE_URL = 'https://hub.invalid'"
+    )
+
+    content.gsub!(
+      /(InstallationConfig\.find_by\(name:\s*['"]INSTALLATION_PRICING_PLAN['"]\)&?\.value\s*\|\|\s*)['"]community['"]/,
+      "\\1'enterprise'"
+    )
+
+    content.gsub!(
+      /(InstallationConfig\.find_by\(name:\s*['"]INSTALLATION_PRICING_PLAN_QUANTITY['"]\)&?\.value\s*\|\|\s*)0/,
+      "\\19999999"
+    )
+
+    if content != original
+      File.write(hub_file, content)
+      puts "✅ URL do hub bloqueada e fallbacks atualizados em #{hub_file}"
+    else
+      puts "ℹ️  Arquivo base já estava atualizado"
+    end
+    puts ""
+  else
+    puts "⚠️  Arquivo base não encontrado, pulando..."
+    puts ""
+  end
+
+rescue => e
+  puts "⚠️  Erro ao atualizar arquivo base: #{e.message}"
+  puts ""
+end
+
 # Atualiza URL do hub em enterprise/lib/enterprise/chatwoot_hub.rb
 begin
   enterprise_possible_paths = [
@@ -129,13 +181,11 @@ begin
     content  = File.read(enterprise_hub_file)
     original = content.dup
 
-    # Bloqueia a URL enterprise
     content.gsub!(
       /ENTERPRISE_BASE_URL\s*=\s*['"]https:\/\/hub\.[^'"]+['"]/,
       "ENTERPRISE_BASE_URL = 'https://hub.invalid'"
     )
 
-    # Garante que a variável de ambiente também não consiga sobrescrever
     content.gsub!(
       /ENV\.fetch\(['"]CHATWOOT_HUB_URL['"],\s*ENTERPRISE_BASE_URL\)/,
       "'https://hub.invalid'"
@@ -158,11 +208,6 @@ rescue => e
   puts ""
 end
 
-rescue => e
-  puts "⚠️  Erro ao atualizar arquivo: #{e.message}"
-  puts ""
-end
-
 # Verifica configurações finais
 begin
   puts "🔍 Verificando configurações aplicadas:"
@@ -182,10 +227,14 @@ begin
     puts "   • Trigger PostgreSQL: ⚠️  Não detectado"
   end
 
-  # Verifica URL do hub no arquivo
-  if hub_file && File.exist?(hub_file)
+  if defined?(hub_file) && hub_file && File.exist?(hub_file)
     hub_url_line = File.readlines(hub_file).find { |l| l.include?('DEFAULT_BASE_URL') }
-    puts "   • Hub URL: #{hub_url_line&.strip || 'não encontrada'}"
+    puts "   • Hub URL (base): #{hub_url_line&.strip || 'não encontrada'}"
+  end
+
+  if defined?(enterprise_hub_file) && enterprise_hub_file && File.exist?(enterprise_hub_file)
+    ent_url_line = File.readlines(enterprise_hub_file).find { |l| l.include?('ENTERPRISE_BASE_URL') }
+    puts "   • Hub URL (enterprise): #{ent_url_line&.strip || 'não encontrada'}"
   end
 
 rescue => e
@@ -199,7 +248,7 @@ puts "🔒 PROTEÇÃO ATIVA:"
 puts "   • Trigger PostgreSQL monitora e força valores enterprise"
 puts "   • Qualquer tentativa de alterar será revertida automaticamente"
 puts "   • Configurações marcadas como 'locked'"
-puts "   • Comunicação com hub.chatwoot.com bloqueada"
+puts "   • Comunicação com hub.chatwoot.com bloqueada (base + enterprise)"
 puts ""
 puts "🔄 Reinicie o container para aplicar todas as mudanças"
 puts "🌟 Dchat - Educational Project"
